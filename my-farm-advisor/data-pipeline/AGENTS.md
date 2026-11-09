@@ -184,6 +184,17 @@ cd ../..
 ./scripts/validate.sh
 ```
 
+Generate grower-level interactive web maps from existing field boundaries (one
+small Leaflet HTML per grower, ESRI World Imagery basemap; see the
+[grower-web-map](grower-web-map/SKILL.md) subskill):
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src/scripts/reporting/generate_grower_web_map.py" \
+  --all-growers
+```
+
 ## Local workflow notes
 
 - Keep this skill tiny and operational: copy baseline files from `src/` into live storage, preserve live data across reboot or redeploy, and use auditable `rsync` commands.

@@ -22,6 +22,8 @@ Usage:
   export DATA_PIPELINE_DATA_ROOT=... AG_GROWER_SLUG=... AG_FARM_SLUG=...
   python download_csb_fields.py --bbox S W N E --min-area-ha 40 \
       --field-prefix ia-r --max-fields 3
+  python download_csb_fields.py --bbox S W N E --field-prefix il- \
+      --max-fields 1 --field-offset 3 --crops "soybeans,wheat"
 """
 from __future__ import annotations
 
@@ -64,6 +66,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bbox", type=float, nargs=4, required=True, metavar=("S", "W", "N", "E"))
     ap.add_argument("--min-area-ha", type=float, default=40.0)
     ap.add_argument("--max-fields", type=int, default=3)
+    ap.add_argument(
+        "--crops",
+        default="",
+        help=(
+            "Comma-separated crop:name allowlist (case-insensitive). Empty means "
+            "no crop filter. Use to append fields with a specific crop."
+        ),
+    )
+    ap.add_argument(
+        "--field-offset",
+        type=int,
+        default=0,
+        help="Start suffix for field slugs so appended fields continue numbering (e.g. 3 -> il-4).",
+    )
     ap.add_argument("--field-prefix", required=True)
     ap.add_argument("--country", default="US")
     ap.add_argument("--state", default="")
@@ -117,6 +133,13 @@ def main(argv: list[str] | None = None) -> int:
                 if ha >= args.min_area_ha:
                     rows.append((fid, crop, county, ha, poly))
     rows.sort(key=lambda r: (-r[3], str(r[0])))
+    if args.crops.strip():
+        wanted = [c.strip().lower() for c in args.crops.split(",") if c.strip()]
+        rows = [
+            r
+            for r in rows
+            if r[1] is not None and any(w in str(r[1]).lower() for w in wanted)
+        ]
     rows = rows[: args.max_fields]
     if not rows:
         print("no fields above threshold in this window")
@@ -126,7 +149,7 @@ def main(argv: list[str] | None = None) -> int:
     merged = None
     farm_bounds = farm_dir / "boundary" / "field_boundaries.geojson"
     for i, (fid, crop, county, ha, poly) in enumerate(rows):
-        slug = f"{args.field_prefix}{i + 1}"
+        slug = f"{args.field_prefix}{args.field_offset + i + 1}"
         fdir = farm_dir / "fields" / slug
         (fdir / "boundary").mkdir(parents=True, exist_ok=True)
         gdf = gpd.GeoDataFrame(

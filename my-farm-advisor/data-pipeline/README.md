@@ -40,6 +40,11 @@ Per-field composite figures (terrain hillshade + contours, soil polygons, and
 per-year crop class over the boundary) render from the same archive with
 `scripts/render_field_maps.py`.
 
+Grower-level interactive web maps — real field polygons on an online satellite
+basemap, with click metadata and a field list — render from the same archive
+with `scripts/reporting/generate_grower_web_map.py`; see the
+[grower-web-map](grower-web-map/SKILL.md) subskill.
+
 This subskill ships the scripts that build the data-pipeline reports and
 posters. Each runtime host creates its own virtualenv inside the data tree on
 first run; the scripts auto-bootstrap that environment before continuing.
