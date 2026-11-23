@@ -123,6 +123,11 @@ cd "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src"
   --cdl-window-years 5
 ```
 
+The weather step validates any cached farm CSV against the current boundary
+field ids and the requested year window, and refetches when either changed (for
+example after adding fields), so extending a farm no longer needs an explicit
+`--force`. Pass `--force` to refetch unconditionally.
+
 Use the legacy NASA POWER point API only for small debugging pulls:
 
 ```bash
