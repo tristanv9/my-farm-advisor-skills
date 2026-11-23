@@ -195,6 +195,27 @@ export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
   --all-growers
 ```
 
+Expand an existing US (CSB) farm by N fields without re-selecting and
+duplicating the fields it already has. The grower/farm directory and
+`farm.json` must already exist (scaffold with
+`run_farm_pipeline.py --structure-test --grower-slug <g> --farm-slug <f> --farm-name <n>`
+first if needed):
+
+```bash
+export DATA_PIPELINE_DATA_ROOT=/absolute/path/to/my-farm-advisor-runtime
+AG_GROWER_SLUG=il-grower AG_FARM_SLUG=il-farm \
+"${DATA_PIPELINE_DATA_ROOT}/data-pipeline/.venv/bin/python" \
+  "${DATA_PIPELINE_DATA_ROOT}/data-pipeline/src/scripts/ingest/download_csb_fields.py" \
+  --bbox 40.5 -87.9 40.95 -87.45 \
+  --field-prefix il- --max-fields 6 --field-offset 4 --min-area-ha 40 \
+  --country US --state IL --year 2025 \
+  --county-name Iroquois --exclude-existing
+```
+
+`--exclude-existing` skips CSB ids already recorded in the farm boundary and
+`--county-name` keeps added fields inside one county; both are optional and
+backwards compatible. `--field-offset 4` continues numbering at `il-5`.
+
 ## Local workflow notes
 
 - Keep this skill tiny and operational: copy baseline files from `src/` into live storage, preserve live data across reboot or redeploy, and use auditable `rsync` commands.

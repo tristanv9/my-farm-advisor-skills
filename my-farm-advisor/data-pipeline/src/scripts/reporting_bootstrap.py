@@ -164,6 +164,21 @@ def _write_text(path: Path, text: str, *, overwrite: bool = True) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _boundary_property(boundary_path: Path, key: str) -> str | None:
+    """Return the first non-empty `key` value across a boundary GeoJSON's features."""
+    if not boundary_path.exists():
+        return None
+    try:
+        payload = json.loads(boundary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for feature in payload.get("features", []):
+        value = (feature.get("properties") or {}).get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
 def ensure_canonical_field_artifacts(
     field_slug: str, grower_slug: str = DEFAULT_GROWER, farm_slug: str = DEFAULT_FARM
 ) -> None:
@@ -406,14 +421,32 @@ def ensure_canonical_data_tree(
     (farm / "derived" / "summaries").mkdir(parents=True, exist_ok=True)
     (farm / "derived" / "dashboards").mkdir(parents=True, exist_ok=True)
     (farm / "derived" / "tables").mkdir(parents=True, exist_ok=True)
+    farm_metadata_path = farm / "farm.json"
+    existing_farm_metadata: dict = {}
+    if farm_metadata_path.exists():
+        try:
+            existing_farm_metadata = json.loads(farm_metadata_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            existing_farm_metadata = {}
+    boundary_path = farm / "boundary" / "field_boundaries.geojson"
+    state_value = (
+        _boundary_property(boundary_path, "state")
+        or existing_farm_metadata.get("state")
+        or ""
+    )
+    country_value = (
+        _boundary_property(boundary_path, "country")
+        or existing_farm_metadata.get("country")
+        or "US"
+    )
     _write_json(
         farm / "farm.json",
         {
             "grower_slug": grower_slug,
             "farm_slug": farm_slug,
             "display_name": farm_name,
-            "state": "IA",
-            "country": "US",
+            "state": state_value,
+            "country": country_value,
             "default_crs": "EPSG:4326",
             "notes": "Canonical farm metadata",
         },
