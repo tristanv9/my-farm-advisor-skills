@@ -19,6 +19,7 @@ this report is saved in this folder as `assignment-2-field-eda-report.pdf`.
 | --- | --- |
 | `assignment-2-field-eda-report.pdf` | The two-page report. Open this from the pull request. |
 | `generate_assignment_2_report.py` | One-time reproducibility script that rebuilds the PDF from the run outputs. |
+| `figures/` | The ten standalone EDA figures (PNG) from the same run. |
 | `README.md` | This note. |
 
 ## What the report covers
