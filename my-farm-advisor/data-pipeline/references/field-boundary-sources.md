@@ -38,6 +38,13 @@ area_ha_est, crop, area_acres` (+ `source`, and source-specific ids like
 * `--bbox` on ALL ingest scripts is `S W N E`. Getting the order wrong scans
   the whole state — sanity-check county names against the farm's state before
   accepting fields.
+* **Extending an existing US farm** (add fields while keeping the current set):
+  run `download_csb_fields.py` with `--exclude-existing`, which skips CSB ids
+  already recorded in the farm boundary, plus `--field-offset <current count>`
+  so numbering continues (`--field-offset 4` → `il-5`). Add
+  `--county-name <name>` to keep the additions in one county. Without
+  `--exclude-existing` the largest fields are re-selected under new slugs and
+  duplicate polygons land in the farm boundary.
 
 ## AU / ON / EU / anywhere OSM maps farms — Overpass (`download_osm_fields.py`)
 

@@ -114,6 +114,44 @@ def _write_weather_outputs(
             field_weather.to_csv(target, index=False)
 
 
+def _weather_cache_is_current(
+    cached_path: Path,
+    *,
+    expected_field_ids: set[str],
+    start_year: int,
+    end_year: int,
+) -> tuple[bool, str]:
+    """Check whether an existing farm weather CSV still matches this farm.
+
+    A cache hit is only valid when the CSV covers exactly the boundary's current
+    field ids and every requested year. Otherwise adding fields (or widening the
+    year window) would silently keep a stale, partial table.
+    """
+    try:
+        cached = pd.read_csv(cached_path, usecols=["field_id", "date"], parse_dates=["date"])
+    except (OSError, ValueError, pd.errors.ParserError) as exc:
+        return False, f"unreadable cache ({exc.__class__.__name__})"
+    if cached.empty:
+        return False, "empty cache"
+
+    cached_ids = set(cached["field_id"].astype(str).str.strip())
+    missing = sorted(expected_field_ids - cached_ids)
+    extra = sorted(cached_ids - expected_field_ids)
+    if missing or extra:
+        parts = []
+        if missing:
+            parts.append(f"missing fields: {', '.join(missing)}")
+        if extra:
+            parts.append(f"unknown fields: {', '.join(extra)}")
+        return False, "; ".join(parts)
+
+    cached_years = set(cached["date"].dt.year.dropna().astype(int).tolist())
+    missing_years = sorted(set(range(start_year, end_year + 1)) - cached_years)
+    if missing_years:
+        return False, f"missing years: {', '.join(str(y) for y in missing_years)}"
+    return True, "covers current fields and years"
+
+
 def _stage_weather_override(weather_csv: str, combined_output: Path) -> pd.DataFrame:
     override_path = _resolve_runtime_path(weather_csv)
     if not override_path.exists():
@@ -269,16 +307,25 @@ def main():
         return weather_df
 
     if combined_output.exists() and not force:
-        weather_df = pd.read_csv(combined_output, parse_dates=["date"])
-        _write_weather_outputs(
-            weather_df,
-            combined_output=combined_output,
-            grower_slug=grower_slug,
-            farm_slug=farm_slug,
-            field_slug_map=field_slug_map,
+        expected_ids = set(fields["field_id"].astype(str).str.strip())
+        current, reason = _weather_cache_is_current(
+            combined_output,
+            expected_field_ids=expected_ids,
+            start_year=args.weather_start_year,
+            end_year=args.weather_end_year,
         )
-        print(f"skip  weather fetch (cached): {combined_output}")
-        return weather_df
+        if current:
+            weather_df = pd.read_csv(combined_output, parse_dates=["date"])
+            _write_weather_outputs(
+                weather_df,
+                combined_output=combined_output,
+                grower_slug=grower_slug,
+                farm_slug=farm_slug,
+                field_slug_map=field_slug_map,
+            )
+            print(f"skip  weather fetch (cached): {combined_output}")
+            return weather_df
+        print(f"stale  weather cache ({reason}); refetching: {combined_output}")
 
     print(f"Loaded {len(fields)} fields")
     print(

@@ -24,6 +24,9 @@ Usage:
       --field-prefix ia-r --max-fields 3
   python download_csb_fields.py --bbox S W N E --field-prefix il- \
       --max-fields 1 --field-offset 3 --crops "soybeans,wheat"
+  # extend an existing farm: keep current fields, add the next-largest new ones
+  python download_csb_fields.py --bbox S W N E --field-prefix il- \
+      --max-fields 6 --field-offset 4 --county-name Iroquois --exclude-existing
 """
 from __future__ import annotations
 
@@ -84,6 +87,19 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--country", default="US")
     ap.add_argument("--state", default="")
     ap.add_argument("--year", default="")
+    ap.add_argument(
+        "--exclude-existing",
+        action="store_true",
+        help=(
+            "Exclude CSB ids already present in the farm boundary so a re-run extends "
+            "the farm instead of re-selecting (and duplicating) existing fields."
+        ),
+    )
+    ap.add_argument(
+        "--county-name",
+        default="",
+        help="Optional county filter (case-insensitive substring) applied to candidates.",
+    )
     args = ap.parse_args(argv)
 
     grower = os.environ.get("AG_GROWER_SLUG") or sys.exit("AG_GROWER_SLUG required")
@@ -91,6 +107,17 @@ def main(argv: list[str] | None = None) -> int:
     farm_dir = DATA_ROOT / "growers" / grower / "farms" / farm
     if not farm_dir.exists():
         sys.exit(f"farm dir missing: {farm_dir} (create farm.json first)")
+
+    existing_boundary = farm_dir / "boundary" / "field_boundaries.geojson"
+    excluded_csb_ids: set[str] = set()
+    if args.exclude_existing and existing_boundary.exists():
+        existing = gpd.read_file(existing_boundary)
+        if "csb_id" in existing.columns:
+            excluded_csb_ids = {
+                str(value).strip()
+                for value in existing["csb_id"].tolist()
+                if value is not None and str(value).strip()
+            }
 
     s, w, n, e = args.bbox
     fo = fsspec.open(URL, block_size=2**26).open()
@@ -140,9 +167,31 @@ def main(argv: list[str] | None = None) -> int:
             for r in rows
             if r[1] is not None and any(w in str(r[1]).lower() for w in wanted)
         ]
-    rows = rows[: args.max_fields]
+    if args.county_name.strip():
+        needle = args.county_name.strip().lower()
+        rows = [r for r in rows if r[2] is not None and needle in str(r[2]).lower()]
+    if excluded_csb_ids:
+        rows = [r for r in rows if str(r[0]) not in excluded_csb_ids]
+    # Defensive de-duplication by CSB id so one run can never emit the same polygon twice.
+    seen_csb_ids: set[str] = set()
+    unique_rows = []
+    for row in rows:
+        key = str(row[0])
+        if key in seen_csb_ids:
+            continue
+        seen_csb_ids.add(key)
+        unique_rows.append(row)
+    rows = unique_rows[: args.max_fields]
     if not rows:
-        print("no fields above threshold in this window")
+        filters = []
+        if args.crops.strip():
+            filters.append(f"crops={args.crops}")
+        if args.county_name.strip():
+            filters.append(f"county={args.county_name}")
+        if excluded_csb_ids:
+            filters.append(f"excluded_csb_ids={len(excluded_csb_ids)}")
+        suffix = f" ({', '.join(filters)})" if filters else ""
+        print(f"no fields above threshold in this window{suffix}")
         return 1
 
     inv_rows = []
@@ -199,6 +248,9 @@ def main(argv: list[str] | None = None) -> int:
         "row_groups_read": len(sel),
         "total_row_groups": pf.metadata.num_row_groups,
         "min_area_ha": args.min_area_ha,
+        "county_name_filter": args.county_name or None,
+        "exclude_existing": bool(args.exclude_existing),
+        "excluded_csb_ids": sorted(excluded_csb_ids),
         "accessed_at": _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
         "fields": [r["field_id"] for r in inv_rows],
     }
@@ -211,6 +263,18 @@ def main(argv: list[str] | None = None) -> int:
     log = json.loads(journal.read_text()) if journal.exists() else {}
     log[f"{grower}/{farm}/{args.field_prefix}"] = prov
     journal.write_text(json.dumps(log, indent=2, default=str))
+
+    # Backfill county FIPS routing keys (state_fips/county_fips/county_name) so
+    # CSB farms match bootstrap farms for CDL and other FIPS-based workflows.
+    enrich_script = Path(__file__).resolve().parent / "enrich_boundary_fips.py"
+    if enrich_script.exists():
+        subprocess.run(
+            [sys.executable, str(enrich_script)],
+            cwd=str(DATA_ROOT),
+            check=False,
+            env={**os.environ, "AG_GROWER_SLUG": grower, "AG_FARM_SLUG": farm},
+        )
+
     print(f"\n✓ {len(rows)} real CSB fields -> {inv}")
     return 0
 

@@ -1,7 +1,8 @@
 # Data Pipeline Runtime Setup
 
 Real-farm field polygons per country (CSB GeoParquet pruning, Overpass rules,
-repository contract, new-country checklist):
+repository contract, new-country checklist, and how to extend an existing farm
+without duplicating its fields):
 [references/field-boundary-sources.md](references/field-boundary-sources.md).
 Soil provider selection by boundary `country`:
 [../soil/soil-routing.md](../soil/soil-routing.md).
