@@ -4,6 +4,15 @@ One-time, two-page PDF report assembled from the static outputs of the
 `eda/field-eda` subskill for the Assignment 2 run. It is **not** part of the
 reusable subskill; the subskill stops at figures, tables, and a manifest.
 
+## Custom EDA skill
+
+The custom skill behind these outputs is **Field EDA** (`field-eda`), at
+[`eda/field-eda/`](../field-eda/). It compares field boundaries, CDL/cropland
+history, and weather across growers and writes ten static figures, four CSV
+tables, and one manifest. Outputs are saved under
+`${DATA_PIPELINE_DATA_ROOT}/data-pipeline/eda/field-eda/output/<run-name>/`;
+this report is saved in this folder as `assignment-2-field-eda-report.pdf`.
+
 ## Files
 
 | File | Purpose |
